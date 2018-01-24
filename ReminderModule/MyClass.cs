@@ -48,8 +48,11 @@ namespace MonikaBot.ReminderModule
             manager.AddCommand(new CommandStub("remindme", "Reminds you at a certain time.", "remindme <time> <what to be reminded of>", 
                                                PermissionType.User, 2, cmdArgs=>
             {
-
-                Console.WriteLine(cmdArgs.Args[0]);
+                //Args[0] would theoretically be the string you'd extract the time frame from
+                if(cmdArgs.Args.Count > 0)
+                {
+                    
+                }
 
             }), this);
         }
