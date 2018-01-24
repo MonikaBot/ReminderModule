@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 using System.Linq;
 using DSharpPlus.Entities;
 
-public class MainEntryPoint : IModuleEntryPoint
+public class ModuleEntryPoint : IModuleEntryPoint
 {
     public IModule GetModule()
     {
@@ -49,7 +49,7 @@ namespace MonikaBot.ReminderModule
                                                PermissionType.User, 2, cmdArgs=>
             {
 
-                Console.WriteLine(cmdArgs.Args[1]);
+                Console.WriteLine(cmdArgs.Args[0]);
 
             }), this);
         }
