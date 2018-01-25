@@ -43,15 +43,6 @@ namespace MonikaBot.ReminderModule
         public override void Install(CommandsManager manager)
         {
             Timer checkReminderTimer = new Timer(TimerElapsed, new AutoResetEvent(false), 0, 2000);
-            
-
-            manager.AddCommand(new CommandStub("embedtest", "test", "test", PermissionType.Admin, cmdArgs=>
-            {
-                DiscordEmbedBuilder b = new DiscordEmbedBuilder();
-                b.AddField("Test", "value");
-
-                cmdArgs.Channel.SendMessageAsync(embed: b.Build());
-            }), this);
 
             manager.AddCommand(new CommandStub("remindme", "Reminds you at a certain time.", "remindme <time without spaces> <what to be reminded of>", 
                                                PermissionType.User, 2, cmdArgs=>
@@ -72,10 +63,12 @@ namespace MonikaBot.ReminderModule
                         };
 
                         DiscordEmbedBuilder b = new DiscordEmbedBuilder();
-                        b.AddField("Test", "value");
-                        b.Build();
+                        b.WithAuthor("Monika Bot", icon_url: "https://cdn.discordapp.com/app-icons/400465606454935562/07d979fd0d7f973cef55ecde5630105c.png");
+                        b.WithColor(DiscordColor.Green);
+                        b.AddField("Reminder", reminderText);
+                        b.AddField("Time", r.ReminderTime.ToString());
 
-                        cmdArgs.Channel.SendMessageAsync($"Okay <@{cmdArgs.Author.Mention}>! I've created your reminder~\n");
+                        cmdArgs.Channel.SendMessageAsync($"Okay <@{cmdArgs.Author.Mention}>! I've created your reminder~\n", embed: b.Build());
                     }
                     else
                     {
