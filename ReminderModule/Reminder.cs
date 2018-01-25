@@ -51,7 +51,7 @@ namespace MonikaBot.ReminderModule
                 b.AddField("Test", "value");
 
                 cmdArgs.Channel.SendMessageAsync(embed: b.Build());
-            }));
+            }), this);
 
             manager.AddCommand(new CommandStub("remindme", "Reminds you at a certain time.", "remindme <time without spaces> <what to be reminded of>", 
                                                PermissionType.User, 2, cmdArgs=>
