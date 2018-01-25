@@ -45,13 +45,42 @@ namespace MonikaBot.ReminderModule
             Timer checkReminderTimer = new Timer(TimerElapsed, new AutoResetEvent(false), 0, 2000);
             
 
-            manager.AddCommand(new CommandStub("remindme", "Reminds you at a certain time.", "remindme <time> <what to be reminded of>", 
+            manager.AddCommand(new CommandStub("embedtest", "test", "test", PermissionType.Admin, cmdArgs=>
+            {
+                DiscordEmbedBuilder b = new DiscordEmbedBuilder();
+                b.AddField("Test", "value");
+
+                cmdArgs.Channel.SendMessageAsync(embed: b.Build());
+            }));
+
+            manager.AddCommand(new CommandStub("remindme", "Reminds you at a certain time.", "remindme <time without spaces> <what to be reminded of>", 
                                                PermissionType.User, 2, cmdArgs=>
             {
                 //Args[0] would theoretically be the string you'd extract the time frame from
                 if(cmdArgs.Args.Count > 0)
                 {
-                    
+                    TimeSpan reminderTime;
+                    string reminderText = cmdArgs.Args.Count > 1 ? cmdArgs.Args[0] : "Reminder!";
+                    if(TimeSpan.TryParse(cmdArgs.Args[0], out reminderTime))
+                    {
+                        Reminder r = new Reminder()
+                        {
+                            AuthorID = cmdArgs.Author.Id.ToString(),
+                            Channel = cmdArgs.Channel,
+                            ReminderText = reminderText,
+                            ReminderTime = (DateTime.Now + reminderTime)
+                        };
+
+                        DiscordEmbedBuilder b = new DiscordEmbedBuilder();
+                        b.AddField("Test", "value");
+                        b.Build();
+
+                        cmdArgs.Channel.SendMessageAsync($"Okay <@{cmdArgs.Author.Mention}>! I've created your reminder~\n");
+                    }
+                    else
+                    {
+                        cmdArgs.Channel.SendMessageAsync("What kind of time is that? :/");
+                    }
                 }
 
             }), this);
