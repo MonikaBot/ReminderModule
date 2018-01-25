@@ -64,11 +64,13 @@ namespace MonikaBot.ReminderModule
 
                         DiscordEmbedBuilder b = new DiscordEmbedBuilder();
                         b.WithAuthor("Monika Bot", icon_url: "https://cdn.discordapp.com/app-icons/400465606454935562/07d979fd0d7f973cef55ecde5630105c.png");
-                        b.WithColor(DiscordColor.Green);
+                        b.WithColor(DiscordColor.Purple);
                         b.AddField("Reminder", reminderText);
                         b.AddField("Time", r.ReminderTime.ToString());
 
-                        cmdArgs.Channel.SendMessageAsync($"Okay <@{cmdArgs.Author.Mention}>! I've created your reminder~\n", embed: b.Build());
+                        reminderDatabase.Add(cmdArgs.Author.Id.ToString(), r);
+
+                        cmdArgs.Channel.SendMessageAsync($"Okay {cmdArgs.Author.Mention}! I've created your reminder~\n", embed: b.Build());
                     }
                     else
                     {
@@ -88,6 +90,7 @@ namespace MonikaBot.ReminderModule
             DateTime timeOfExecution = DateTime.Now;
             Task.Run(() =>
             {
+                Console.WriteLine("timer ticks");
                 Reminder v = reminderDatabase.First(x => TicksCloseToEachother(timeOfExecution, x.Value.ReminderTime)).Value;
                 if(v != null)
                 {
