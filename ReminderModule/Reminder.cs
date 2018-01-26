@@ -7,6 +7,7 @@ using MonikaBot.Commands;
 using Newtonsoft.Json;
 using System.Linq;
 using DSharpPlus.Entities;
+using System.Globalization;
 
 public class ModuleEntryPoint : IModuleEntryPoint
 {
@@ -25,34 +26,59 @@ namespace MonikaBot.ReminderModule
         public DiscordChannel Channel { get; set; }
         public string AuthorID { get; set; }
     }
+    internal class TimerStateObjClass
+    {
+        public System.Threading.Timer TimerReference;  
+        public bool TimerCanceled;  
+    }
 
     public class ReminderModule : IModule
     {
         public static string ReminderDatabasePath = "reminders.json";
 
         // id, date to be reminded
-        private Dictionary<string, Reminder> reminderDatabase;
+        private List<Reminder> reminderDatabase;
+        private TimerStateObjClass objClass;
 
         public ReminderModule()
         {
             Name = "Reminder Module";
             Description = "Reminds you of things.";
             ModuleKind = ModuleType.External;
+
+            reminderDatabase = new List<Reminder>();
+        }
+
+        public override void ShutdownModule(CommandsManager manager)
+        {
+            FlushReminderDictionary();
+        }
+
+        private void BeginTimer()
+        {
+            objClass = new TimerStateObjClass();
+            objClass.TimerCanceled = false;
+            TimerCallback timerDelegate = new TimerCallback(TimerElapsed);
+
+            System.Threading.Timer checkReminderTimer = new Timer(timerDelegate, objClass, 0, 2000);
+
+            objClass.TimerReference = checkReminderTimer;
         }
 
         public override void Install(CommandsManager manager)
         {
-            Timer checkReminderTimer = new Timer(TimerElapsed, new AutoResetEvent(false), 0, 2000);
+            LoadReminderDictionary();
+            BeginTimer();
 
-            manager.AddCommand(new CommandStub("remindme", "Reminds you at a certain time.", "remindme <time without spaces> <what to be reminded of>", 
-                                               PermissionType.User, 2, cmdArgs=>
+            manager.AddCommand(new CommandStub("remindme", "Reminds you at a certain time.", "remindme <time without spaces> <what to be reminded of>", cmdArgs=>
             {
                 //Args[0] would theoretically be the string you'd extract the time frame from
                 if(cmdArgs.Args.Count > 0)
                 {
                     TimeSpan reminderTime;
-                    string reminderText = cmdArgs.Args.Count > 1 ? cmdArgs.Args[0] : "Reminder!";
-                    if(TimeSpan.TryParse(cmdArgs.Args[0], out reminderTime))
+                    string reminderText = cmdArgs.Args.Count > 1 ? cmdArgs.Args[1] : "Reminder!";
+                    reminderTime = DateTime.ParseExact(cmdArgs.Args[0], "HH:mm", CultureInfo.InvariantCulture).TimeOfDay;
+                    if(reminderTime != TimeSpan.Zero)
                     {
                         Reminder r = new Reminder()
                         {
@@ -68,7 +94,7 @@ namespace MonikaBot.ReminderModule
                         b.AddField("Reminder", reminderText);
                         b.AddField("Time", r.ReminderTime.ToString());
 
-                        reminderDatabase.Add(cmdArgs.Author.Id.ToString(), r);
+                        reminderDatabase.Add(r);
 
                         cmdArgs.Channel.SendMessageAsync($"Okay {cmdArgs.Author.Mention}! I've created your reminder~\n", embed: b.Build());
                     }
@@ -78,7 +104,7 @@ namespace MonikaBot.ReminderModule
                     }
                 }
 
-            }), this);
+            }, argCount: 2), this);
         }
 
         /// <summary>
@@ -88,23 +114,53 @@ namespace MonikaBot.ReminderModule
         private void TimerElapsed(object stateInfo)
         {
             DateTime timeOfExecution = DateTime.Now;
-            Task.Run(() =>
+            Reminder v;
+            try
             {
-                Console.WriteLine("timer ticks");
-                Reminder v = reminderDatabase.First(x => TicksCloseToEachother(timeOfExecution, x.Value.ReminderTime)).Value;
-                if(v != null)
+                lock (reminderDatabase)
+                {
+                    v = reminderDatabase.First(x => TimesCloseToEachother(timeOfExecution, x.ReminderTime));
+                }
+                if (v != null)
                 {
                     v.Channel.SendMessageAsync($"Oh <@{v.AuthorID}>~! You asked to be reminded of `{v.ReminderText}`!");
+                    lock (reminderDatabase)
+                    {
+                        reminderDatabase.Remove(v);
+                    }
                 }
-            });
+            }
+            catch(System.InvalidOperationException)
+            {}
+            catch(Exception ex)
+            {
+                Console.WriteLine("Timer Elapsed Error: " + ex.Message);
+            }
+
+            if ((stateInfo as TimerStateObjClass).TimerCanceled)
+            {
+                (stateInfo as TimerStateObjClass).TimerReference.Dispose();
+            }
         }
 
-        private bool TicksCloseToEachother(DateTime first, DateTime second, int val = 10)
+        private bool TimesCloseToEachother(DateTime timeOfExecution, DateTime reminderTime, int val = 5)
         {
-            if(Math.Abs(first.Ticks - second.Ticks) <= val)
+            if(Math.Abs(timeOfExecution.Minute - reminderTime.Minute) <= 0)
+            {
+                if(Math.Abs(timeOfExecution.Hour - reminderTime.Hour) <= 0)
+                {
+                    return true;
+                }
+            }
+            if (timeOfExecution > reminderTime)
+                return true;
+                
+
+            /*
+            if(Math.Abs(first.Second - second.Second) <= val)
             {
                 return true;
-            }
+            }*/
             return false;
         }
 
@@ -118,9 +174,12 @@ namespace MonikaBot.ReminderModule
 
         public void LoadReminderDictionary()
         {
-            using(var sr = new StreamReader(ReminderDatabasePath))
+            if (File.Exists(ReminderDatabasePath))
             {
-                reminderDatabase = JsonConvert.DeserializeObject<Dictionary<string, Reminder>>(sr.ReadToEnd());
+                using (var sr = new StreamReader(ReminderDatabasePath))
+                {
+                    reminderDatabase = JsonConvert.DeserializeObject<List<Reminder>>(sr.ReadToEnd());
+                }
             }
         }
     }

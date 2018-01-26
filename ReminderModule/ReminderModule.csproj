@@ -32,12 +32,12 @@
       <HintPath>..\packages\Newtonsoft.Json.10.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System.Net.Http" />
-    <Reference Include="MonikaBot.CommandManager">
-      <HintPath>..\packages\MonikaBot.CommandManager.1.0.0.1\lib\net452\MonikaBot.CommandManager.dll</HintPath>
-    </Reference>
     <Reference Include="System.Core" />
     <Reference Include="DSharpPlus">
       <HintPath>..\packages\DSharpPlus.3.2.3\lib\net45\DSharpPlus.dll</HintPath>
+    </Reference>
+    <Reference Include="MonikaBot.CommandManager">
+      <HintPath>..\packages\MonikaBot.CommandManager.1.1.0\lib\net452\MonikaBot.CommandManager.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
