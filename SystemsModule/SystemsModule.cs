@@ -1,0 +1,205 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using MonikaBot.Commands;
+using Newtonsoft.Json;
+using System.Linq;
+using DSharpPlus.Entities;
+using System.Globalization;
+using System.Linq;
+using SystemsModule;
+
+public class ModuleEntryPoint : IModuleEntryPoint
+{
+    public IModule GetModule()
+    {
+        return new MonikaBot.SystemsModule.SystemsModule();
+    }
+}
+
+namespace MonikaBot.SystemsModule
+{
+    public class SystemsModule : IModule
+    {
+        void Client_MessageCreated(DSharpPlus.EventArgs.MessageCreateEventArgs e)
+        {
+        }
+
+
+        public static string SystemsDatabasePath = "systems.json";
+
+        private bool WaitingOnInput = false;
+        private DiscordUser WaitingOnInputFrom = null;
+
+        Dictionary<ulong, SystemsCollection<string, string>> SystemsDatabase = new Dictionary<ulong, SystemsCollection<string, string>>();
+
+        public SystemsModule()
+        {
+            Name = "Systems Module";
+            Description = "A complex module for allowing users to list their systems.";
+            ModuleKind = ModuleType.External;
+        }
+
+        public override void ShutdownModule(CommandsManager manager)
+        {
+            FlushSystemsModule();
+        }
+
+        private void FlushSystemsModule()
+        {
+            using (var sw = new StreamWriter(SystemsDatabasePath))
+            {
+                sw.Write(JsonConvert.SerializeObject(SystemsDatabase, Formatting.Indented));
+            }
+        }
+
+        public void LoadSystemsDictionary()
+        {
+            if (File.Exists(SystemsDatabasePath))
+            {
+                using (var sr = new StreamReader(SystemsDatabasePath))
+                {
+                    try
+                    {
+                        SystemsDatabase = JsonConvert.DeserializeObject<Dictionary<ulong, SystemsCollection<string, string>>>(sr.ReadToEnd());
+                    }
+                    catch(Exception)
+                    {
+                        Console.WriteLine("Old Systems database, deleting.");
+                        File.Delete(SystemsDatabasePath);
+                    }
+                }
+            }
+        }
+
+        private DiscordUser GetUserByID(DiscordGuild guild, string id)
+        {
+            List<DiscordUser> membersList = (List<DiscordUser>)guild.Members;
+            return membersList.Find(x => x.Id.ToString() == id);
+        }
+
+        public override void Install(CommandsManager manager)
+        {
+            LoadSystemsDictionary();
+
+            manager.AddCommand(new CommandStub("addsystem", "Adds your system to the database, simply follow the prompts. ", "addsystem", cmdArgs =>
+            {
+                cmdArgs.Channel.SendMessageAsync("Yay!");
+                Console.WriteLine("fucking work");
+                var m = cmdArgs.Channel.SendMessageAsync($"Please enter system name/specs");
+
+                    Console.WriteLine($"[SystemsModule] Waiting on input from {cmdArgs.Message.Author.Username}");
+                    WaitingOnInput = true;
+                    WaitingOnInputFrom = cmdArgs.Message.Author;
+
+                    manager.Client.MessageCreated += async (
+                        e) =>
+                    {
+                        if (WaitingOnInput)
+                        {
+                            if (WaitingOnInputFrom == e.Author)
+                            {
+                                SystemsCollection<string, string> collection = null;
+                                if (SystemsDatabase.ContainsKey(e.Author.Id)) //we already have a systems collection for this user.
+                                {
+                                    collection = SystemsDatabase[e.Author.Id];
+                                }
+                                else
+                                {
+                                    collection = new SystemsCollection<string, string>();
+                                    collection.UserSnowflake = e.Author.Id;
+                                }
+                                collection.Add("unimplemented", e.Message.Content);
+                                SystemsDatabase.Add(e.Author.Id, collection);
+                                WaitingOnInput = false;
+
+                                //Might as well save after write, I don't pay for the SSD on the VPS...
+                                FlushSystemsModule();
+
+                                await cmdArgs.Channel.SendMessageAsync("👌");
+                            }
+                        }
+                    };
+            }, argCount: 0), this);
+
+            manager.AddCommand(new CommandStub("system", "get someone's specs (mention is optional)", "system <user>", cmdArgs =>
+            {
+                Console.WriteLine("Args: " + cmdArgs.Args.Count);
+                Console.WriteLine(cmdArgs.Args[0]);
+                if (cmdArgs.Args.Count == 1)
+                {
+                    // Check if it's a mention and handle nicely
+                    if(cmdArgs.Args[0].StartsWith("<@") && (cmdArgs.Args[0].EndsWith(">")))
+                    {
+                        ulong ID = ulong.Parse(cmdArgs.Args[0].Trim(new char[] { '<', '>', '@', '!' }));
+                        List<DiscordMember> membersListAsList = new List<DiscordMember>(cmdArgs.Channel.Guild.Members);
+                        DiscordMember member = membersListAsList.Find(x => x.Id == ID);
+
+                        if (SystemsDatabase.ContainsKey(ID))
+                        {
+                            SystemsCollection<string, string> collection = SystemsDatabase[ID];
+                            var first = collection.First();
+                            string system = first.Value;
+                            // TODO come back in a sec
+                            DiscordEmbedBuilder b = new DiscordEmbedBuilder();
+                            b.WithAuthor(member.DisplayName, icon_url: member.AvatarUrl);
+                            b.WithColor(DiscordColor.Purple);
+                            b.AddField("System", system);
+
+                            cmdArgs.Channel.SendMessageAsync(embed: b.Build());
+                        }
+                        else
+                            cmdArgs.Channel.SendMessageAsync("Sorry! You're not in the database :c");
+                    }
+                    else
+                    {
+                        IReadOnlyList<DiscordMember> membersList = cmdArgs.Channel.Guild.Members;
+                        if(membersList != null)
+                        {
+                            List<DiscordMember> membersListAsList = new List<DiscordMember>(membersList);
+                            DiscordMember member = membersListAsList.Find(x => x.Username.Trim('@') == cmdArgs.Args[0].Trim());
+
+                            if (member != null)
+                            {
+                                if(SystemsDatabase.ContainsKey(member.Id))
+                                {
+                                    SystemsCollection<string, string> collection = SystemsDatabase[member.Id];
+                                    var first = collection.First();
+                                    string system = first.Value;
+                                    //cmdArgs.Channel.SendMessageAsync($"**System for {member.DisplayName}**:\n\n{system}");
+
+                                    DiscordEmbedBuilder b = new DiscordEmbedBuilder();
+                                    b.WithAuthor(member.DisplayName, icon_url: member.AvatarUrl);
+                                    b.WithColor(DiscordColor.Purple);
+                                    b.AddField("System", system);
+
+                                    cmdArgs.Channel.SendMessageAsync(embed: b.Build());
+                                }
+                                else
+                                    cmdArgs.Channel.SendMessageAsync("Sorry! Not in the database :c");
+                            }
+                        }
+                    }
+                }
+            }, PermissionType.User, 1), this);     
+
+            manager.AddCommand(new CommandStub("removesystem", "remove your system", "removesystem", cmdArgs =>
+            {
+                ulong userID = cmdArgs.Message.Author.Id;
+
+                try
+                {
+                    SystemsDatabase.Remove(userID);
+                    cmdArgs.Channel.SendMessageAsync("👌");
+                }
+                catch(Exception ex)
+                {
+                    cmdArgs.Channel.SendMessageAsync("Unable to remove your system. Please tell an admin immediately, something is royally borked.\n\n```\n" +
+                                                     ex.Message + "\n```");
+                }
+            }, PermissionType.User, 0), this); 
+        }
+    }
+}
