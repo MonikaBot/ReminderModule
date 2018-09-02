@@ -94,37 +94,43 @@ namespace MonikaBot.SystemsModule
                 {
                     if (WaitingOnInputFrom.Id == e.Author.Id && WaitingChannel.Id == e.Channel.Id)
                     {
-                        Console.WriteLine($"Got input from correct person {WaitingOnInputFrom.Id} == {e.Author.Id}");
-                        try
+                        if (!e.Message.Content.Contains("addsystem")) //skip because this has already been handled.
                         {
-                            if (SystemsDatabase.ContainsKey(e.Author.Id)) //we already have a systems collection for this user.
+                            Console.WriteLine($"Got input from correct person in correct channel {WaitingOnInputFrom.Id} == {e.Author.Id}");
+                            Console.WriteLine("Message: " + e.Message.Content);
+                            try
                             {
-                                SystemsDatabase[e.Author.Id].Add("notyet", e.Message.Content);
-                                Console.WriteLine("Already had one, added");
+                                if (SystemsDatabase.ContainsKey(e.Author.Id)) //we already have a systems collection for this user.
+                                {
+                                    SystemsDatabase[e.Author.Id].Add("System " + (SystemsDatabase[e.Author.Id].Count + 1), e.Message.Content);
+                                    Console.WriteLine("Already had one, added");
+                                }
+                                else
+                                {
+                                    SystemsCollection<string, string> collection = new SystemsCollection<string, string>();
+                                    collection.UserSnowflake = e.Author.Id;
+                                    collection.Add("System " + (SystemsDatabase[e.Author.Id].Count + 1), e.Message.Content);
+                                    SystemsDatabase.Add(e.Author.Id, collection);
+
+                                    Console.WriteLine("Created one");
+
+                                }
+                                //SystemsDatabase[e.Author.Id] = collection;
+                                WaitingOnInput = false;
+                                WaitingOnInputFrom = null;
+                                Console.WriteLine("Flushing");
+                                //Might as well save after write, I don't pay for the SSD on the VPS...
+                                FlushSystemsModule();
+
+                                await e.Channel.SendMessageAsync("👌");
                             }
-                            else
+                            catch (Exception ex)
                             {
-                                SystemsCollection<string, string> collection = new SystemsCollection<string, string>();
-                                collection.UserSnowflake = e.Author.Id;
-                                collection.Add("notyet", e.Message.Content);
-                                SystemsDatabase.Add(e.Author.Id, collection);
-
-                                Console.WriteLine("Created one");
-
+                                await e.Channel.SendMessageAsync("bro something is royally fucked: " + ex.Message);
+                                Console.WriteLine("Exception details\n\n" + ex.Message + "\n\n" + ex.StackTrace + "\n\n");
+                                WaitingOnInput = false;
+                                WaitingOnInputFrom = null;
                             }
-                            //SystemsDatabase[e.Author.Id] = collection;
-                            WaitingOnInput = false;
-                            Console.WriteLine("Flushing");
-                            //Might as well save after write, I don't pay for the SSD on the VPS...
-                            FlushSystemsModule();
-
-                            await e.Channel.SendMessageAsync("👌");
-                        }
-                        catch (Exception ex)
-                        {
-                            await e.Channel.SendMessageAsync("bro something is royally fucked");
-                            WaitingOnInput = false;
-                            WaitingOnInputFrom = null;
                         }
                     }
                 }
