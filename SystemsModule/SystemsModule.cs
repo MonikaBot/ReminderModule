@@ -33,6 +33,8 @@ namespace MonikaBot.SystemsModule
         private bool WaitingOnInput = false;
         private DiscordUser WaitingOnInputFrom = null;
 
+        public DiscordChannel WaitingChannel { get; private set; }
+
         Dictionary<ulong, SystemsCollection<string, string>> SystemsDatabase = new Dictionary<ulong, SystemsCollection<string, string>>();
 
         public SystemsModule()
@@ -42,7 +44,7 @@ namespace MonikaBot.SystemsModule
             ModuleKind = ModuleType.External;
         }
 
-        public override void ShutdownModule(CommandsManager manager)
+        public override void ShutdownModule(CommandsManager managers)
         {
             FlushSystemsModule();
         }
@@ -84,6 +86,50 @@ namespace MonikaBot.SystemsModule
         {
             LoadSystemsDictionary();
 
+            // Setup the one time listener for adding systems.
+            manager.Client.MessageCreated += async (
+                        e) =>
+            {
+                if (WaitingOnInput)
+                {
+                    if (WaitingOnInputFrom.Id == e.Author.Id && WaitingChannel.Id == e.Channel.Id)
+                    {
+                        Console.WriteLine($"Got input from correct person {WaitingOnInputFrom.Id} == {e.Author.Id}");
+                        try
+                        {
+                            if (SystemsDatabase.ContainsKey(e.Author.Id)) //we already have a systems collection for this user.
+                            {
+                                SystemsDatabase[e.Author.Id].Add("notyet", e.Message.Content);
+                                Console.WriteLine("Already had one, added");
+                            }
+                            else
+                            {
+                                SystemsCollection<string, string> collection = new SystemsCollection<string, string>();
+                                collection.UserSnowflake = e.Author.Id;
+                                collection.Add("notyet", e.Message.Content);
+                                SystemsDatabase.Add(e.Author.Id, collection);
+
+                                Console.WriteLine("Created one");
+
+                            }
+                            //SystemsDatabase[e.Author.Id] = collection;
+                            WaitingOnInput = false;
+                            Console.WriteLine("Flushing");
+                            //Might as well save after write, I don't pay for the SSD on the VPS...
+                            FlushSystemsModule();
+
+                            await e.Channel.SendMessageAsync("👌");
+                        }
+                        catch (Exception ex)
+                        {
+                            await e.Channel.SendMessageAsync("bro something is royally fucked");
+                            WaitingOnInput = false;
+                            WaitingOnInputFrom = null;
+                        }
+                    }
+                }
+            };
+
             manager.AddCommand(new CommandStub("addsystem", "Adds your system to the database, simply follow the prompts. ", "addsystem", cmdArgs =>
             {
                 cmdArgs.Channel.SendMessageAsync("Yay!");
@@ -93,45 +139,15 @@ namespace MonikaBot.SystemsModule
                     Console.WriteLine($"[SystemsModule] Waiting on input from {cmdArgs.Message.Author.Username}");
                     WaitingOnInput = true;
                     WaitingOnInputFrom = cmdArgs.Message.Author;
-
-                    manager.Client.MessageCreated += async (
-                        e) =>
-                    {
-                        if (WaitingOnInput)
-                        {
-                            if (WaitingOnInputFrom == e.Author)
-                            {
-                                SystemsCollection<string, string> collection = null;
-                                if (SystemsDatabase.ContainsKey(e.Author.Id)) //we already have a systems collection for this user.
-                                {
-                                    collection = SystemsDatabase[e.Author.Id];
-                                }
-                                else
-                                {
-                                    collection = new SystemsCollection<string, string>();
-                                    collection.UserSnowflake = e.Author.Id;
-                                }
-                                collection.Add("unimplemented", e.Message.Content);
-                                SystemsDatabase.Add(e.Author.Id, collection);
-                                WaitingOnInput = false;
-
-                                //Might as well save after write, I don't pay for the SSD on the VPS...
-                                FlushSystemsModule();
-
-                                await cmdArgs.Channel.SendMessageAsync("👌");
-                            }
-                        }
-                    };
+                    WaitingChannel = cmdArgs.Message.Channel;
             }, argCount: 0), this);
 
             manager.AddCommand(new CommandStub("system", "get someone's specs (mention is optional)", "system <user>", cmdArgs =>
             {
-                Console.WriteLine("Args: " + cmdArgs.Args.Count);
-                Console.WriteLine(cmdArgs.Args[0]);
                 if (cmdArgs.Args.Count == 1)
                 {
                     // Check if it's a mention and handle nicely
-                    if(cmdArgs.Args[0].StartsWith("<@") && (cmdArgs.Args[0].EndsWith(">")))
+                    if (cmdArgs.Args[0].StartsWith("<@") && (cmdArgs.Args[0].EndsWith(">")))
                     {
                         ulong ID = ulong.Parse(cmdArgs.Args[0].Trim(new char[] { '<', '>', '@', '!' }));
                         List<DiscordMember> membersListAsList = new List<DiscordMember>(cmdArgs.Channel.Guild.Members);
@@ -156,14 +172,14 @@ namespace MonikaBot.SystemsModule
                     else
                     {
                         IReadOnlyList<DiscordMember> membersList = cmdArgs.Channel.Guild.Members;
-                        if(membersList != null)
+                        if (membersList != null)
                         {
                             List<DiscordMember> membersListAsList = new List<DiscordMember>(membersList);
                             DiscordMember member = membersListAsList.Find(x => x.Username.Trim('@') == cmdArgs.Args[0].Trim());
 
                             if (member != null)
                             {
-                                if(SystemsDatabase.ContainsKey(member.Id))
+                                if (SystemsDatabase.ContainsKey(member.Id))
                                 {
                                     SystemsCollection<string, string> collection = SystemsDatabase[member.Id];
                                     var first = collection.First();
@@ -182,6 +198,28 @@ namespace MonikaBot.SystemsModule
                             }
                         }
                     }
+                }
+                else //do it for self
+                {
+                    ulong ID = cmdArgs.Author.Id;
+                    List<DiscordMember> membersListAsList = new List<DiscordMember>(cmdArgs.Channel.Guild.Members);
+                    DiscordMember member = membersListAsList.Find(x => x.Id == ID);
+
+                    if (SystemsDatabase.ContainsKey(ID))
+                    {
+                        SystemsCollection<string, string> collection = SystemsDatabase[ID];
+                        var first = collection.First();
+                        string system = first.Value;
+                        // TODO come back in a sec
+                        DiscordEmbedBuilder b = new DiscordEmbedBuilder();
+                        b.WithAuthor(member.DisplayName, icon_url: member.AvatarUrl);
+                        b.WithColor(DiscordColor.Purple);
+                        b.AddField("System", system);
+
+                        cmdArgs.Channel.SendMessageAsync(embed: b.Build());
+                    }
+                    else
+                        cmdArgs.Channel.SendMessageAsync("Sorry! You're not in the database :c");
                 }
             }, PermissionType.User, 1), this);     
 
