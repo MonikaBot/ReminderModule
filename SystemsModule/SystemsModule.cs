@@ -32,8 +32,8 @@ namespace MonikaBot.SystemsModule
 
         private bool WaitingOnInput = false;
         private DiscordUser WaitingOnInputFrom = null;
-
-        public DiscordChannel WaitingChannel { get; private set; }
+        private DiscordChannel WaitingChannel = null;
+        private string PotentialSystemName = "";
 
         Dictionary<ulong, SystemsCollection<string, string>> SystemsDatabase = new Dictionary<ulong, SystemsCollection<string, string>>();
 
@@ -109,7 +109,13 @@ namespace MonikaBot.SystemsModule
                                 {
                                     SystemsCollection<string, string> collection = new SystemsCollection<string, string>();
                                     collection.UserSnowflake = e.Author.Id;
-                                    collection.Add("System " + (SystemsDatabase[e.Author.Id].Count + 1), e.Message.Content);
+                                    string systemName = "System " + (SystemsDatabase[e.Author.Id].Count + 1);
+                                    if (!String.IsNullOrEmpty(PotentialSystemName))
+                                    {
+                                        systemName = PotentialSystemName;
+                                        PotentialSystemName = null;
+                                    }
+                                    collection.Add(systemName, e.Message.Content);
                                     SystemsDatabase.Add(e.Author.Id, collection);
 
                                     Console.WriteLine("Created one");
@@ -138,15 +144,21 @@ namespace MonikaBot.SystemsModule
 
             manager.AddCommand(new CommandStub("addsystem", "Adds your system to the database, simply follow the prompts. ", "addsystem", cmdArgs =>
             {
+                if (cmdArgs.Args.Count > 1)
+                {
+                    PotentialSystemName = cmdArgs.Args[1];
+                }
+                else
+                    PotentialSystemName = null;
+
                 cmdArgs.Channel.SendMessageAsync("Yay!");
                 Console.WriteLine("fucking work");
                 var m = cmdArgs.Channel.SendMessageAsync($"Please enter system name/specs");
-
-                    Console.WriteLine($"[SystemsModule] Waiting on input from {cmdArgs.Message.Author.Username}");
-                    WaitingOnInput = true;
-                    WaitingOnInputFrom = cmdArgs.Message.Author;
-                    WaitingChannel = cmdArgs.Message.Channel;
-            }, argCount: 0), this);
+                Console.WriteLine($"[SystemsModule] Waiting on input from {cmdArgs.Message.Author.Username}");
+                WaitingOnInput = true;
+                WaitingOnInputFrom = cmdArgs.Message.Author;
+                WaitingChannel = cmdArgs.Message.Channel;
+            }, argCount: 1), this);
 
             manager.AddCommand(new CommandStub("system", "get someone's specs (mention is optional)", "system <user>", cmdArgs =>
             {
@@ -195,7 +207,7 @@ namespace MonikaBot.SystemsModule
                                     DiscordEmbedBuilder b = new DiscordEmbedBuilder();
                                     b.WithAuthor(member.DisplayName, icon_url: member.AvatarUrl);
                                     b.WithColor(DiscordColor.Purple);
-                                    b.AddField("System", system);
+                                    b.AddField(first.Key, system);
 
                                     cmdArgs.Channel.SendMessageAsync(embed: b.Build());
                                 }
@@ -220,7 +232,7 @@ namespace MonikaBot.SystemsModule
                         DiscordEmbedBuilder b = new DiscordEmbedBuilder();
                         b.WithAuthor(member.DisplayName, icon_url: member.AvatarUrl);
                         b.WithColor(DiscordColor.Purple);
-                        b.AddField("System", system);
+                        b.AddField(first.Key, system);
 
                         cmdArgs.Channel.SendMessageAsync(embed: b.Build());
                     }
