@@ -69,7 +69,7 @@ namespace MonikaBot.SystemsModule
                     }
                     catch(Exception)
                     {
-                        Console.WriteLine("Old Systems database, deleting.");
+                        Console.WriteLine("[SystemsModule] Old Systems database, deleting.");
                         File.Delete(SystemsDatabasePath);
                     }
                 }
@@ -96,35 +96,33 @@ namespace MonikaBot.SystemsModule
                     {
                         if (!e.Message.Content.Contains("addsystem")) //skip because this has already been handled.
                         {
-                            Console.WriteLine($"Got input from correct person in correct channel {WaitingOnInputFrom.Id} == {e.Author.Id}");
-                            Console.WriteLine("Message: " + e.Message.Content);
+                            Console.WriteLine($"[SystemsModule] Got input from correct person in correct channel {WaitingOnInputFrom.Id} == {e.Author.Id}");
                             try
                             {
                                 if (SystemsDatabase.ContainsKey(e.Author.Id)) //we already have a systems collection for this user.
                                 {
+                                    Console.WriteLine("[SystemsModule] Already had one, added");
                                     SystemsDatabase[e.Author.Id].Add("System " + (SystemsDatabase[e.Author.Id].Count + 1), e.Message.Content);
-                                    Console.WriteLine("Already had one, added");
                                 }
                                 else
                                 {
+                                    Console.WriteLine("[SystemsModule] Created one");
                                     SystemsCollection<string, string> collection = new SystemsCollection<string, string>();
                                     collection.UserSnowflake = e.Author.Id;
-                                    string systemName = "System " + (SystemsDatabase[e.Author.Id].Count + 1);
+
+                                    string systemName = "System 1";
                                     if (!String.IsNullOrEmpty(PotentialSystemName))
                                     {
-                                        systemName = PotentialSystemName;
+                                        systemName = PotentialSystemName.Trim();
                                         PotentialSystemName = null;
                                     }
                                     collection.Add(systemName, e.Message.Content);
                                     SystemsDatabase.Add(e.Author.Id, collection);
-
-                                    Console.WriteLine("Created one");
-
                                 }
                                 //SystemsDatabase[e.Author.Id] = collection;
                                 WaitingOnInput = false;
                                 WaitingOnInputFrom = null;
-                                Console.WriteLine("Flushing");
+                                Console.WriteLine("[SystemsModule] Flushing");
                                 //Might as well save after write, I don't pay for the SSD on the VPS...
                                 FlushSystemsModule();
 
@@ -133,7 +131,7 @@ namespace MonikaBot.SystemsModule
                             catch (Exception ex)
                             {
                                 await e.Channel.SendMessageAsync("bro something is royally fucked: " + ex.Message);
-                                Console.WriteLine("Exception details\n\n" + ex.Message + "\n\n" + ex.StackTrace + "\n\n");
+                                Console.WriteLine("[SystemsModule] Exception details\n\n" + ex.Message + "\n\n" + ex.StackTrace + "\n\n");
                                 WaitingOnInput = false;
                                 WaitingOnInputFrom = null;
                             }
@@ -150,10 +148,8 @@ namespace MonikaBot.SystemsModule
                 }
                 else
                     PotentialSystemName = null;
-
-                cmdArgs.Channel.SendMessageAsync("Yay!");
-                Console.WriteLine("fucking work");
-                var m = cmdArgs.Channel.SendMessageAsync($"Please enter system name/specs");
+                
+                var m = cmdArgs.Channel.SendMessageAsync($"Please enter system specs");
                 Console.WriteLine($"[SystemsModule] Waiting on input from {cmdArgs.Message.Author.Username}");
                 WaitingOnInput = true;
                 WaitingOnInputFrom = cmdArgs.Message.Author;
